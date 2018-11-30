@@ -1,8 +1,17 @@
 import numpy, os
-import math
+import math, matplotlib.pyplot as plt
 from PIL import Image
 import cv2 as cv
 from scipy.signal import filtfilt
+
+show_images = False
+
+def show_image(array):
+    if show_images:
+        try:
+            Image.fromarray(array).show()
+        except:
+            array.show()
 
 #COMPLETE
 def extract_head_ix_v2(y_RMS):
@@ -10,7 +19,7 @@ def extract_head_ix_v2(y_RMS):
 
     head_max_ix = min([i for i, j in enumerate(y_RMS) if j == m])
 
-    RMS_thresh = (sum(y_RMS)/len(y_RMS))*1.5
+    RMS_thresh = numpy.mean(y_RMS)*1.33
 
     RMS_diff = numpy.concatenate((0,numpy.diff(y_RMS)), axis=None)
 
@@ -63,33 +72,24 @@ def calc_y_outline(im_input,x_center,y_center):
     row = s[0]
     col = s[1]
     y_out_neg = numpy.zeros(row)
-    for ii in range(row):
-        iterate = 1
-        jj = x_center
-        if im_input[ii][x_center] ==0:
-            y_out_neg[ii] = 0
-        else :
-            while iterate == 1:
-                if im_input[ii][jj]== 0:
-                    y_out_neg[ii] = jj-x_center+1
-                    iterate = 0
-                jj = jj-1
-
-    y_out_neg = y_out_neg * -1
-
     y_out_pos = numpy.zeros(row)
-    for ii in range(row):
-        iterate = 1
-        jj = x_center+1
-        if im_input[ii][x_center+1] == 0:
-            y_out_pos[ii] = 0
-        else :
-            while iterate == 1:
-                if im_input[ii][jj] == 0:
-                    y_out_pos[ii] = jj-x_center-1
-                    iterate = 0
-                jj = jj+1
 
+    for ii in range(row):
+        pixel_ix = numpy.where(im_input[ii, :] == 255)[0]
+        if pixel_ix.size == 0:
+            y_out_neg[ii] = 0
+            y_out_pos[ii] = 0
+        else:
+            pixel_neg_ix = pixel_ix[pixel_ix <= x_center]
+            if pixel_neg_ix.size == 0:
+                y_out_neg[ii] = 0
+            else:
+                y_out_neg[ii] = x_center - min(pixel_neg_ix)
+            pixel_pos_ix = pixel_ix[pixel_ix >= x_center]
+            if pixel_pos_ix.size == 0:
+                y_out_pos[ii] = 0
+            else:
+                y_out_pos[ii] = max(pixel_pos_ix) - x_center
 
     m = max(y_out_pos)
     max_ix = max([i for i, j in enumerate(y_out_pos) if j == m])
@@ -102,23 +102,27 @@ def calc_y_outline(im_input,x_center,y_center):
 
 #NOT COMPLETE
 def estimate_parameters(im_fill,y_out,x_bounds,y_bounds,dpi):
-    #t = Image.fromarray(im_fill)
-    #t.show()
+
+    show_image(im_fill)
 
     smooth_length = 5
     y_out = y_out[y_out != 0]
     num_RMS_pts = len(y_out)
 
-    y_RMS_smooth = filtfilt(numpy.ones((smooth_length,)),1,y_out)
+    y_RMS_smooth = filtfilt(numpy.ones(smooth_length),1,y_out)
+    if show_images:
+        plt.plot(y_RMS_smooth, 'k')
+        plt.show()
+
     #Check below
     head_edge_ix = extract_head_ix_v2(y_RMS_smooth)
 
-    pixel_width_v = numpy.zeros((int(y_bounds[1]-head_edge_ix),1))
+    pixel_width_v = numpy.zeros(int(y_bounds[1]-head_edge_ix))
     #fix y bounds
     n = 0
     for kx in range(int(y_bounds[0]+head_edge_ix),int(y_bounds[1])):
-        pixel_width_v[n] = sum(im_fill[kx] > 0)
-        n = n+1
+        pixel_width_v[n] = sum(im_fill[kx, :] > 0)
+        n += 1
     #body_pixel_width = max(pixel_width_v)
     #screw_width = body_pixel_width/dpi
 
@@ -127,7 +131,17 @@ def estimate_parameters(im_fill,y_out,x_bounds,y_bounds,dpi):
 
     body_RMS_smooth = y_RMS_smooth[range(head_edge_ix,num_RMS_pts)] #y_RMS_smooth must be numpy.array
 
+    if show_images:
+        mn_rms = numpy.mean(body_RMS_smooth)
+        plt.plot(body_RMS_smooth, 'k')
+        plt.plot(numpy.ones(len(body_RMS_smooth))*mn_rms, "r--")
+        plt.plot(numpy.ones(len(body_RMS_smooth))*mn_rms*1.05, "k--")
+        plt.plot(numpy.ones(len(body_RMS_smooth))*mn_rms*0.95, "k--")
+        plt.title("RMS_SMOOTH")
+        plt.show()
+
     [thread_count,thread_spacing] = estimate_thread_count(body_RMS_smooth)
+    print("Thread Count " + str(thread_count))
     thread_count = int(thread_count)
     body_outline = y_out[head_edge_ix:]
     thread_max_width_v = numpy.zeros((thread_count -1,1))
@@ -168,8 +182,8 @@ def estimate_thread_count(body_RMS):
     curr_ix = body_samples
     crit_point = mean_RMS_body*.95
     crit_point_ix = 0
-    while (iterate):
-        if (body_RMS[curr_ix] > crit_point):
+    while iterate:
+        if body_RMS[curr_ix] > crit_point:
             crit_point_ix = curr_ix
             iterate = 0
         else:
@@ -182,20 +196,16 @@ def estimate_thread_count(body_RMS):
     else:
         below_thresh = 0
 
-
-
-
-
     pos_cross_v = []#fix
     neg_cross_v = []#fix
     for ii in range(len(body_RMS)):
-        if (below_thresh):
-            if (body_RMS[ii] > mean_RMS_body):
+        if below_thresh:
+            if body_RMS[ii] > mean_RMS_body:
                 below_thresh = 0
                 pos_cross_v.append(ii)
 
         else:
-            if (body_RMS[ii] <= mean_RMS_body):
+            if body_RMS[ii] <= mean_RMS_body:
                 below_thresh = 1
                 neg_cross_v.append(ii)
     pos_spacing_v = numpy.zeros(len(pos_cross_v)-1)
@@ -203,7 +213,8 @@ def estimate_thread_count(body_RMS):
         pos_spacing_v[kx] = pos_cross_v[kx+1]-pos_cross_v[kx] #check
 
     median_pos_spacing = numpy.median(pos_spacing_v)
-
+    if math.isnan(median_pos_spacing):
+        median_pos_spacing = 0
     neg_spacing_v = numpy.zeros(len(neg_cross_v)-1)
     for kx in range(len(neg_cross_v)-1):
         neg_spacing_v[kx] = neg_cross_v[kx+1]-neg_cross_v[kx] #check
@@ -221,30 +232,27 @@ def cleanup_image(im_input):
     im_filter_1 = im_diff_filter(im_input, 14, [1, -1])
     im_filter_2 = im_diff_filter(im_input, 14, [1, 0, 0, -1])
 
-    #t = Image.fromarray(im_filter_1)
-    #t.show()
-    #t = Image.fromarray(im_filter_2)
-    #t.show()
-    #im_filter = Image.fromarray(im_filter)
+    show_image(im_filter_1)
+    show_image(im_filter_2)
 
     s = im_filter_1.shape
     both_pic = numpy.zeros((s[0], s[1]))
     both_pic[(im_filter_1 == 255) | (im_filter_2 == 255)] = 255
 
     im_filter = both_pic
-    #Image.fromarray(both_pic).show("both filters")
+    show_image(both_pic)
+
     im_crop, row_crop_ix, col_crop_ix, x_center, y_center, x_bounds, y_bounds = crop_image(im_filter, 0)
-    #Image.fromarray(im_crop).show()
+    show_image(im_crop)
     im_align, im_angle, slope_RMS = alignimage(im_crop) #probable bug in alignimage for 180 degrees
 
-    #im_align.show()
+    show_image(im_align)
 
     # ============ Fill in image ==============
     im_fill,row_crop_ix,col_crop_ix,x_center,y_center,x_bounds,y_bounds = crop_image(im_align,1) #check
     #im_crop,row_crop_ix,col_crop_ix,x_center,y_center,x_bounds,y_bounds
 
-    #t = Image.fromarray(im_fill)
-    #t.show()
+    show_image(im_fill)
 
     # =============== Morphological Transform =================
     SE_grow = numpy.ones((3,3),numpy.uint8)
@@ -255,11 +263,9 @@ def cleanup_image(im_input):
     SE_erode = numpy.ones((3,2),numpy.uint8)
 
     im_dilated = cv.dilate(im_fill,SE_grow,iterations = 1) #check
-    t = Image.fromarray(im_dilated)
-    #t.show()
+    show_image(im_dilated)
     im_eroded = cv.erode(im_dilated,SE_erode,iterations = 1) #check
-    t = Image.fromarray(im_eroded)
-    #t.show()
+    show_image(im_eroded)
 
     im_fill = im_eroded
 
@@ -283,9 +289,9 @@ def cleanup_image(im_input):
 
 
     im_align_2,im_angle_2,slope_RMS = alignimage(im_fill) #check
-    #im_align_2.show()
+    show_image(im_align_2)
     im_align_2,row_crop_ix,col_crop_ix,x_center,y_center,x_bounds,y_bounds = crop_image(im_align_2,0)
-    #Image.fromarray(im_align_2).show()
+    show_image(im_align_2)
     im_align_3 = Image.fromarray(im_align_2)
     dnc,row_crop_ix,col_crop_ix,x_center,y_center,x_bounds,y_bounds = crop_image(im_align_3,1)
 
@@ -309,21 +315,13 @@ def crop_image(im_align,orient):
     s = im_align.shape
     row = s[0]
     col = s[1]
-    x_proj_v = numpy.zeros(col)
-    y_proj_v = numpy.zeros(row)
-    pixel_width = 0
-    pixel_height = 0
+    x_proj_v = numpy.arange(0, col)
+    y_proj_v = numpy.arange(0, row)
 
-    for ii in range(col):
-        if (sum(im_align[range(row),ii]) > 0):
-            x_proj_v[ii] = ii
-            pixel_width = pixel_width+1
-
-
-    for ii in range(row):
-        if (sum(im_align[ii,range(col)]) > 0):
-            y_proj_v[ii] = ii
-            pixel_height = pixel_height+1
+    row_sums = numpy.sum(im_align, axis=0)
+    col_sums = numpy.sum(im_align, axis=1)
+    x_proj_v[row_sums == 0] = 0
+    y_proj_v[col_sums == 0] = 0
 
     x_sep_block_ix = [] #fix
     on_block = 0
@@ -383,13 +381,13 @@ def crop_image(im_align,orient):
     #x center and y center are values within reason, will not match due to image rotation
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    row_crop_ix = numpy.arange(int(y_center-round(y_pixel_length*.6)),int(y_center+round(y_pixel_length*.6)+1))#check
+    row_crop_ix = numpy.arange(int(y_center-round(y_pixel_length*.6)),int(y_center+round(y_pixel_length*.6)))#check
     #Check above before continuing
-    ixr = row_crop_ix[(row_crop_ix >= 1) | (row_crop_ix <= row)]
+    ixr = row_crop_ix[(row_crop_ix >= 1) & (row_crop_ix <= row)]
 
     col_crop_ix = numpy.arange(int(x_center-x_pixel_length),int(x_center+x_pixel_length))  # check
     # Check above before continuing
-    ixc = col_crop_ix[(col_crop_ix >= 1) | (col_crop_ix <= col)]
+    ixc = col_crop_ix[(col_crop_ix >= 1) & (col_crop_ix <= col)]
 
     ixc = range(int(ixc[0]),int(ixc[-1]))
     ixr = range(int(ixr[0]),int(ixr[-1]))
@@ -420,22 +418,28 @@ def crop_image(im_align,orient):
 
 def get_parameters(file_loc):
 
-    dpi = 370
+    dpi = 326
 
     print("start")
     img = cv.imread(file_loc)
-    im_crop = img[24:959, 249:1771]
+    print(file_loc)
+    im_crop = img[27:1065,315:1760]
     im_crop = Image.fromarray(im_crop)
 
     im_fill,x_center,y_center,x_bounds,y_bounds, filledImageLocation = cleanup_image(im_crop)
 
-    #t = Image.fromarray(im_fill)
-    #t.show()
+    show_image(im_fill)
 
     y_out_pos,y_out_neg = calc_y_outline(im_fill,x_center,y_center)
 
+    pos_accleration = sum(abs(numpy.diff(numpy.diff(y_out_pos))))
+    neg_accleration = sum(abs(numpy.diff(numpy.diff(y_out_neg))))
+    if pos_accleration <= neg_accleration:
+        y_outline = y_out_pos
+    else:
+        y_outline = y_out_neg
 
-    total_screw_length,body_screw_length,body_screw_width,head_screw_width,head_max_loc,thread_count = estimate_parameters(im_fill,y_out_pos,x_bounds,y_bounds,dpi)
+    total_screw_length,body_screw_length,body_screw_width,head_screw_width,head_max_loc,thread_count = estimate_parameters(im_fill,y_outline,x_bounds,y_bounds,dpi)
 
     return total_screw_length,body_screw_length,body_screw_width,head_screw_width,head_max_loc,thread_count, filledImageLocation
 
@@ -536,22 +540,16 @@ def getSlope(binaryImage):
     yCoords = numpy.zeros((numPts, 1))
     xCoords = numpy.ones((numPts, 2))
 
-    count = 0
-    for c in range(s[1]):
-        for r in range(s[0]):
-            pt = binaryImage[r][c]
-            if pt == 255:
-                xCoords[count][1] = c
-                yCoords[count][0] = r
-                count = count + 1
-
+    whereRes = numpy.where(binaryImage==255)
+    yCoords[:] = whereRes[0].reshape(len(whereRes[0]), 1)
+    xCoords[:, 1] = whereRes[1]
     B = numpy.linalg.lstsq(xCoords,yCoords,rcond = -1)
 
     slope = B[0][1]
 
     xCoords = xCoords.T
     xCoordsC = xCoords[1].T
-    xCoordsC = xCoordsC.reshape(len(xCoordsC),1)
+    xCoordsC = xCoordsC.reshape(len(xCoordsC), 1)
     pts = numpy.concatenate((xCoordsC,yCoords),axis = 1)
 
     RMSE = getAvgRMSE(pts, B)
@@ -695,3 +693,4 @@ def alignimage(im):
         out = tt.rotate(180)
     print("done align")
     return out,angleScrew,RMSESlope
+

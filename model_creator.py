@@ -8,7 +8,7 @@ from sklearn.model_selection import cross_val_score
 # File paths
 # DATABASE_PATH is a csv file that is used to construct the model
 # MODEL_PATH is the location that the file is outputted to
-DATABASE_PATH = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\database.csv"
+DATABASE_PATH = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\database3.csv"
 MODEL_PATH = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\trained_model.sav"
 
 # Headers

@@ -1,7 +1,10 @@
 import tkinter
 import predictor
-import threading, time
+import threading, time, os
 from PIL import ImageTk, Image
+from shutil import copyfile
+
+resultsFolder = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\Pi Results Folder"
 
 bgColor = "#444444"
 
@@ -16,12 +19,29 @@ class LoadingScreen(object):
         self.filledImage = None
 
         self.takeImage()
-        self.predictThread = threading.Thread(target=self.predict)
-        self.predictThread.start()
+        self.sendImage()
 
     def takeImage(self):
         self.image = r"C:\Users\Valued Customer\Documents\Senior Design\Prototype 3 Image Database\panheadphillips_sheetmetal_zinc_#12x3p00" \
                      r"\image4.jpg"
+    def sendImage(self):
+        # TODO: ssh image to remote desktop
+
+        # Push image to cloud or computer for processing
+        copyfile(self.image, r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\Cloud Image Folder\taken_image.jpg")
+
+    def didResultsReturn(self):
+        if not len(os.listdir(resultsFolder)) == 2:
+            return False
+        else:
+            return True
+
+    def readResults(self):
+        self.filledImage = resultsFolder + r"\\" + "filled_image.bmp"
+        predictionFile = open(resultsFolder + r"\\" + "prediction.txt")
+        self.prediction = predictionFile.readline()
+        predictionFile.close()
+
 
     def predict(self):
         try:
@@ -86,7 +106,8 @@ class LoadingScreen(object):
             else:
                 index = 0
             totalUpdates += 1
-            if not self.predictThread.is_alive():
+            if self.didResultsReturn():
+                self.readResults()
                 self.startResultsScreen()
             else:
                 bufferingFrameLabel.configure(image=frame)

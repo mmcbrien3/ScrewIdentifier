@@ -1,8 +1,10 @@
 import tkinter
 from PIL import ImageTk, Image
+import shutil, os
 bgColor = "#444444"
 
 stockImageFolder = r"C:\Users\Valued Customer\Documents\Senior Design\Result Images\\"
+resultsFolder = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\Pi Results Folder"
 class ResultsScreen(object):
 
     def __init__(self, root, width, height, imageLoc, filledImage, results):
@@ -12,7 +14,7 @@ class ResultsScreen(object):
         self.results = results
         self.image = imageLoc
         self.filledImage = filledImage
-        self.stockImage = stockImageFolder + results[0] + ".jpg"
+        self.stockImage = stockImageFolder + results + ".jpg"
         print(filledImage)
 
     def start(self):
@@ -105,7 +107,7 @@ class ResultsScreen(object):
         textLabel = tkinter.Label(frame,
                                   bg=bgColor,
                                   fg="white",
-                                  text=self.formatResultText(resultData[0]))
+                                  text=self.formatResultText(resultData))
 
         capturedImageLabel.pack()
         filledImageLabel.pack()
@@ -152,7 +154,12 @@ class ResultsScreen(object):
         for widget in self.root.winfo_children():
             widget.destroy()
 
+    def deleteResults(self):
+        for file in os.listdir(resultsFolder):
+            os.remove(resultsFolder + r"\\" + file)
+
     def restartProcess(self):
+        self.deleteResults()
         import HomeScreen
         self.homeScreen = HomeScreen.HomeScreen(self.root, self.width, self.height)
 

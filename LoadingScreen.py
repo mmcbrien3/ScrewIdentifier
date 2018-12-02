@@ -20,10 +20,15 @@ class LoadingScreen(object):
         self.predictThread.start()
 
     def takeImage(self):
-        self.image = r"C:\Users\Valued Customer\PycharmProjects\InterfaceWithPredictor\Classifier Test 15Nov2018\image4.jpg"
+        self.image = r"C:\Users\Valued Customer\Documents\Senior Design\Prototype 3 Image Database\panheadphillips_sheetmetal_zinc_#12x3p00" \
+                     r"\image4.jpg"
 
     def predict(self):
-        self.prediction, self.filledImage = predictor.predict_from_image(self.image)
+        try:
+            self.prediction, self.filledImage = predictor.predict_from_image(self.image)
+        except:
+            self.prediction = "FAILED TO FIND SCREW"
+            self.filledImage = None
 
     def start(self):
 
